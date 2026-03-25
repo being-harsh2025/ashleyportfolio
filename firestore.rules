@@ -1,0 +1,107 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: profile
+    //   - name: string
+    //   - title: string
+    //   - bio: string
+    //   - experience: string
+    //   - projectsCount: number
+    //   - companiesCount: number
+    //   - educationLevel: string
+    //   - resumeUrl: string
+    //   - imageUrl: string
+    //
+    // Collection: education
+    //   - degree: string
+    //   - institution: string
+    //   - description: string
+    //   - order: number
+    //
+    // Collection: certificates
+    //   - title: string
+    //   - issuer: string
+    //   - date: string
+    //   - imageUrl: string
+    //   - description: string
+    //
+    // Collection: projects
+    //   - title: string
+    //   - description: string
+    //   - imageUrl: string
+    //   - link: string
+    //
+    // Collection: messages
+    //   - name: string
+    //   - email: string
+    //   - subject: string
+    //   - message: string
+    //   - timestamp: string
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "parkerpeter456a@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // Domain Validators
+    function isValidProfile(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 100 &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() < 2000));
+    }
+
+    function isValidMessage(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.email is string && isValidEmail(data.email) &&
+             data.message is string && data.message.size() > 0 && data.message.size() < 2000;
+    }
+
+    // Rules
+    match /profile/{docId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidProfile(request.resource.data);
+    }
+
+    match /education/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /certificates/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /projects/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /messages/{docId} {
+      allow create: if isValidMessage(request.resource.data);
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read, write: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
+    }
+  }
+}
